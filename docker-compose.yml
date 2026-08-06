@@ -1,0 +1,19 @@
+services:
+  x-video-archiver:
+    build: .
+    container_name: x-video-archiver
+    restart: unless-stopped
+    ports:
+      - "5050:5000"
+    environment:
+      - BASE_DOWNLOAD_DIR=/downloads   # default shown in the UI's Download path field
+      - COOKIES_FILE=/app/config/cookies.txt
+      - SETTINGS_FILE=/app/data/settings.json
+      - STATE_FILE=/app/data/download_state.json
+    volumes:
+      - ./config:/app/config:ro       # optional cookies.txt for X auth
+      - ./data:/app/data              # settings + download-state, persisted
+      # Mount your UNAS share (or its parent, if you keep multiple shares
+      # under one export) here. Whatever you type into the UI's Download
+      # path field must live under this mount to actually go anywhere.
+      - /mnt/unas-shares:/downloads

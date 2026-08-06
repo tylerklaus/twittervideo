@@ -1,0 +1,4 @@
+__pycache__/
+*.pyc
+config/service-account.json
+config/cookies.txt
