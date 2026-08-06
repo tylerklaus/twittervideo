@@ -1,7 +1,8 @@
 FROM python:3.12-slim
 
 # ffmpeg is required by yt-dlp for muxing video+audio into a single mp4
-RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg \
+# tzdata lets the TZ env var (set in docker-compose.yml) actually take effect
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg tzdata \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

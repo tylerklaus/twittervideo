@@ -6,6 +6,7 @@ services:
     ports:
       - "5050:5000"
     environment:
+      - TZ=America/Chicago
       - BASE_DOWNLOAD_DIR=/downloads   # default shown in the UI's Download path field
       - COOKIES_FILE=/app/config/cookies.txt
       - SETTINGS_FILE=/app/data/settings.json
