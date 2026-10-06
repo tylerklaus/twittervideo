@@ -43,7 +43,11 @@ def download_video(tweet_url, video_name, download_dir, overwrite=False):
 
     ydl_opts = {
         "outtmpl": outtmpl,
-        "format": "bv*+ba/b",
+        # Prefer H.264 + AAC so the mp4 opens in Windows players and Adobe tools
+        # (YouTube's default best is often VP9/AV1 + Opus, which they can't read).
+        # Falls back to whatever is available if no H.264 stream exists.
+        "format": "bv*[vcodec^=avc1]+ba[acodec^=mp4a]/bv*[vcodec^=avc1]+ba/b[ext=mp4]/bv*+ba/b",
+        "format_sort": ["vcodec:h264", "acodec:aac", "res", "ext:mp4:m4a"],
         "merge_output_format": "mp4",
         "quiet": True,
         "no_warnings": True,
