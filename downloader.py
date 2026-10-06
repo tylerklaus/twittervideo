@@ -1,5 +1,7 @@
 import os
 import re
+import shutil
+import tempfile
 import yt_dlp
 
 COOKIES_FILE = os.environ.get("COOKIES_FILE", "/app/config/cookies.txt")
@@ -49,9 +51,19 @@ def download_video(tweet_url, video_name, download_dir, overwrite=False):
         "overwrites": overwrite,
     }
 
+    # yt-dlp writes the cookie jar back to its cookiefile on close, which fails
+    # when ./config is mounted read-only -- so hand it a throwaway copy.
+    tmp_cookies = None
     if os.path.exists(COOKIES_FILE):
-        ydl_opts["cookiefile"] = COOKIES_FILE
+        fd, tmp_cookies = tempfile.mkstemp(suffix=".txt")
+        os.close(fd)
+        shutil.copyfile(COOKIES_FILE, tmp_cookies)
+        ydl_opts["cookiefile"] = tmp_cookies
 
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(tweet_url, download=True)
-        return ydl.prepare_filename(info)
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(tweet_url, download=True)
+            return ydl.prepare_filename(info)
+    finally:
+        if tmp_cookies and os.path.exists(tmp_cookies):
+            os.remove(tmp_cookies)
