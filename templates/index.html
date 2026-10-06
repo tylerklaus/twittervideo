@@ -202,6 +202,7 @@
 
   .video-name { color: var(--text); }
   .error-text { color: var(--error); font-size: 12px; margin-top: 3px; }
+  .path-text { color: var(--muted); font-size: 12px; margin-top: 3px; word-break: break-all; }
   .result-actions { margin-top: 5px; }
 
   .empty {
@@ -224,7 +225,10 @@
         <span id="dot" class="dot idle"></span>
         <span class="status-label">Status: <span id="stateLabel" class="state">Idle</span></span>
       </div>
-      <button class="primary" id="runBtn" onclick="triggerRun()">Run now</button>
+      <div>
+        <button class="ghost" id="forceBtn" onclick="triggerRun(true)" title="Ignore download history and download every row again">Re-download all</button>
+        <button class="primary" id="runBtn" onclick="triggerRun()">Run now</button>
+      </div>
     </div>
     <div class="meta">
       <div>Last run started: <span id="lastStarted">{{ state.last_started or "never" }}</span></div>
@@ -270,6 +274,7 @@
             <td>
               <div class="video-name">{{ r.video_name }}</div>
               {% if r.error %}<div class="error-text">{{ r.error }}</div>{% endif %}
+              {% if r.filepath %}<div class="path-text">{{ r.filepath }}</div>{% endif %}
               {% if r.status == 'failed' and r.tweet_url %}
               <div class="result-actions"><button class="ghost small" onclick="retry('{{ r.tweet_url }}')">Retry</button></div>
               {% endif %}
@@ -291,16 +296,24 @@
 
 <script>
 const runBtn = document.getElementById('runBtn');
+const forceBtn = document.getElementById('forceBtn');
 const dot = document.getElementById('dot');
 const stateLabel = document.getElementById('stateLabel');
 
-async function triggerRun() {
+async function triggerRun(force) {
+  if (force && !confirm('Re-download every video in the sheet, ignoring download history? Existing files with the same name will be overwritten.')) return;
   runBtn.disabled = true;
-  const res = await fetch('/run', { method: 'POST' });
+  forceBtn.disabled = true;
+  const res = await fetch('/run', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ force: !!force }),
+  });
   const data = await res.json();
   if (!res.ok) {
     alert(data.message || 'Could not start run.');
     runBtn.disabled = false;
+    forceBtn.disabled = false;
     return;
   }
   poll();
@@ -339,6 +352,7 @@ function renderResults(results) {
       <td>
         <div class="video-name">${r.video_name}</div>
         ${r.error ? `<div class="error-text">${r.error}</div>` : ''}
+        ${r.filepath ? `<div class="path-text">${r.filepath}</div>` : ''}
         ${r.status === 'failed' && r.tweet_url ? `<div class="result-actions"><button class="ghost small" onclick="retry('${r.tweet_url}')">Retry</button></div>` : ''}
       </td>
       <td><span class="badge ${r.status}">${r.status}</span></td>
@@ -355,11 +369,13 @@ async function poll() {
     dot.className = 'dot running';
     stateLabel.textContent = 'Running';
     runBtn.disabled = true;
+    forceBtn.disabled = true;
     setTimeout(poll, 2000);
   } else {
     dot.className = 'dot idle';
     stateLabel.textContent = 'Idle';
     runBtn.disabled = false;
+    forceBtn.disabled = false;
     document.getElementById('lastStarted').textContent = data.last_started || 'never';
     document.getElementById('lastFinished').textContent = data.last_finished || 'never';
     renderResults(data.last_results);

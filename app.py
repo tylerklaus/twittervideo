@@ -25,7 +25,7 @@ run_status = {
 _lock = threading.Lock()
 
 
-def run_job():
+def run_job(force=False):
     with _lock:
         if run_status["running"]:
             log.info("Run requested but a run is already in progress -- skipping.")
@@ -39,24 +39,28 @@ def run_job():
 
     try:
         rows = csv_source.fetch_rows(cfg["csv_url"])
-        pending = [r for r in rows if state.get(r["tweet_url"], {}).get("status") != "done"]
-        log.info(f"{len(rows)} row(s) in sheet, {len(pending)} pending/failed.")
+        if force:
+            pending = rows
+            log.info(f"{len(rows)} row(s) in sheet, force re-downloading all.")
+        else:
+            pending = [r for r in rows if state.get(r["tweet_url"], {}).get("status") != "done"]
+            log.info(f"{len(rows)} row(s) in sheet, {len(pending)} pending/failed.")
 
         for item in pending:
             tweet_url = item["tweet_url"]
             video_name = item["video_name"] or tweet_url
             # Skip anything that already failed -- surfaced in the UI for manual retry
             # rather than hammered every run.
-            if state.get(tweet_url, {}).get("status") == "failed":
+            if not force and state.get(tweet_url, {}).get("status") == "failed":
                 results.append({
                     "video_name": video_name, "tweet_url": tweet_url,
                     "status": "failed", "error": state[tweet_url]["error"] + " (skipped -- use Retry)",
                 })
                 continue
             try:
-                filepath = downloader.download_video(tweet_url, video_name, cfg["download_dir"])
+                filepath = downloader.download_video(tweet_url, video_name, cfg["download_dir"], overwrite=force)
                 state_store.mark_done(state, tweet_url, video_name, filepath)
-                results.append({"video_name": video_name, "tweet_url": tweet_url, "status": "done", "error": ""})
+                results.append({"video_name": video_name, "tweet_url": tweet_url, "status": "done", "error": "", "filepath": filepath})
                 log.info(f"Downloaded: {filepath}")
             except Exception as e:
                 state_store.mark_failed(state, tweet_url, video_name, e)
@@ -91,7 +95,8 @@ def index():
 def force_run():
     if run_status["running"]:
         return jsonify({"ok": False, "message": "A run is already in progress."}), 409
-    threading.Thread(target=run_job, daemon=True).start()
+    data = request.get_json(silent=True) or {}
+    threading.Thread(target=run_job, kwargs={"force": bool(data.get("force"))}, daemon=True).start()
     return jsonify({"ok": True, "message": "Run started."})
 
 

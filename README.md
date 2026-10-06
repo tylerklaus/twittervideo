@@ -29,6 +29,10 @@ it succeeded or failed. Rows already marked "done" are skipped on future
 runs; "failed" rows are skipped too (not retried automatically) until you
 hit **Retry** on that row in the UI.
 
+The UI also has a **Re-download all** button that ignores this history and
+downloads every row again, overwriting existing files of the same name. The
+results table shows the full path each file was saved to.
+
 ## 3. (Optional) Add cookies for X
 
 X gates a lot of video access behind login. Export your X session cookies

@@ -30,7 +30,7 @@ def list_subfolders(path):
     )
 
 
-def download_video(tweet_url, video_name, download_dir):
+def download_video(tweet_url, video_name, download_dir, overwrite=False):
     """
     Downloads a single tweet's video, named after video_name, into
     download_dir (a full absolute path). Raises on failure. Returns the filepath.
@@ -46,6 +46,7 @@ def download_video(tweet_url, video_name, download_dir):
         "quiet": True,
         "no_warnings": True,
         "noprogress": True,
+        "overwrites": overwrite,
     }
 
     if os.path.exists(COOKIES_FILE):
