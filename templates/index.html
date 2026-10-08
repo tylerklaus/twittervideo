@@ -198,6 +198,7 @@
   }
 
   .badge.done { background: rgba(62,207,142,0.15); color: var(--success); }
+  .badge.skipped { background: rgba(125,135,154,0.18); color: var(--muted); }
   .badge.failed { background: rgba(239,91,91,0.15); color: var(--error); }
 
   .video-name { color: var(--text); }
@@ -274,7 +275,11 @@
             <td>
               <div class="video-name">{{ r.video_name }}</div>
               {% if r.error %}<div class="error-text">{{ r.error }}</div>{% endif %}
+              {% if r.note %}<div class="path-text">{{ r.note }}</div>{% endif %}
               {% if r.filepath %}<div class="path-text">{{ r.filepath }}</div>{% endif %}
+              {% if r.status == 'skipped' and r.tweet_url %}
+              <div class="result-actions"><button class="ghost small" data-url="{{ r.tweet_url }}" onclick="redownload(this.dataset.url)">Re-download</button></div>
+              {% endif %}
               {% if r.status == 'failed' and r.tweet_url %}
               <div class="result-actions"><button class="ghost small" onclick="retry('{{ r.tweet_url }}')">Retry</button></div>
               {% endif %}
@@ -319,6 +324,24 @@ async function triggerRun(force) {
   poll();
 }
 
+async function redownload(tweetUrl) {
+  runBtn.disabled = true;
+  forceBtn.disabled = true;
+  const res = await fetch('/run', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ force: true, tweet_url: tweetUrl }),
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    alert(data.message || 'Could not start run.');
+    runBtn.disabled = false;
+    forceBtn.disabled = false;
+    return;
+  }
+  poll();
+}
+
 async function saveSettings() {
   const csv_url = document.getElementById('csvUrl').value;
   const download_dir = document.getElementById('downloadDir').value;
@@ -352,7 +375,9 @@ function renderResults(results) {
       <td>
         <div class="video-name">${r.video_name}</div>
         ${r.error ? `<div class="error-text">${r.error}</div>` : ''}
+        ${r.note ? `<div class="path-text">${r.note}</div>` : ''}
         ${r.filepath ? `<div class="path-text">${r.filepath}</div>` : ''}
+        ${r.status === 'skipped' && r.tweet_url ? `<div class="result-actions"><button class="ghost small" data-url="${r.tweet_url}" onclick="redownload(this.dataset.url)">Re-download</button></div>` : ''}
         ${r.status === 'failed' && r.tweet_url ? `<div class="result-actions"><button class="ghost small" onclick="retry('${r.tweet_url}')">Retry</button></div>` : ''}
       </td>
       <td><span class="badge ${r.status}">${r.status}</span></td>
