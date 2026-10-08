@@ -25,7 +25,7 @@ run_status = {
 _lock = threading.Lock()
 
 
-def run_job(force=False):
+def run_job(force=False, only_url=None):
     with _lock:
         if run_status["running"]:
             log.info("Run requested but a run is already in progress -- skipping.")
@@ -39,16 +39,26 @@ def run_job(force=False):
 
     try:
         rows = csv_source.fetch_rows(cfg["csv_url"])
-        if force:
-            pending = rows
+        if only_url:
+            rows = [r for r in rows if r["tweet_url"] == only_url]
+            log.info(f"Re-downloading single row: {only_url}")
+        elif force:
             log.info(f"{len(rows)} row(s) in sheet, force re-downloading all.")
         else:
-            pending = [r for r in rows if state.get(r["tweet_url"], {}).get("status") != "done"]
-            log.info(f"{len(rows)} row(s) in sheet, {len(pending)} pending/failed.")
+            n_pending = sum(1 for r in rows if state.get(r["tweet_url"], {}).get("status") != "done")
+            log.info(f"{len(rows)} row(s) in sheet, {n_pending} pending/failed.")
 
-        for item in pending:
+        for item in rows:
             tweet_url = item["tweet_url"]
             video_name = item["video_name"] or tweet_url
+            # Already downloaded: report it as skipped (with a Re-download button in the UI).
+            if not force and state.get(tweet_url, {}).get("status") == "done":
+                results.append({
+                    "video_name": video_name, "tweet_url": tweet_url, "status": "skipped",
+                    "error": "", "filepath": state[tweet_url].get("filepath", ""),
+                    "note": "Already downloaded " + state[tweet_url].get("timestamp", ""),
+                })
+                continue
             # Skip anything that already failed -- surfaced in the UI for manual retry
             # rather than hammered every run.
             if not force and state.get(tweet_url, {}).get("status") == "failed":
@@ -72,12 +82,19 @@ def run_job(force=False):
     except Exception as e:
         log.error(f"Run aborted -- could not read CSV: {e}")
         results.append({"video_name": "(CSV error)", "tweet_url": "", "status": "failed", "error": str(e)[:300]})
+        only_url = None
 
     finally:
         with _lock:
             run_status["running"] = False
             run_status["last_finished"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            run_status["last_results"] = results
+            if only_url and results:
+                # Single-row redownload: swap just that row into the previous results.
+                prev = run_status["last_results"]
+                replaced = [results[0] if r.get("tweet_url") == only_url else r for r in prev]
+                run_status["last_results"] = replaced if any(r.get("tweet_url") == only_url for r in prev) else results
+            else:
+                run_status["last_results"] = results
 
 
 @app.route("/")
@@ -96,7 +113,7 @@ def force_run():
     if run_status["running"]:
         return jsonify({"ok": False, "message": "A run is already in progress."}), 409
     data = request.get_json(silent=True) or {}
-    threading.Thread(target=run_job, kwargs={"force": bool(data.get("force"))}, daemon=True).start()
+    threading.Thread(target=run_job, kwargs={"force": bool(data.get("force")), "only_url": data.get("tweet_url") or None}, daemon=True).start()
     return jsonify({"ok": True, "message": "Run started."})
 
 
